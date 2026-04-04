@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"npm.packageManager": "bun",
+		"javascript.validate.enable": true,
+		"typescript.tsdk": "./node_modules/typescript/lib",
+		"typescript.enablePromptUseWorkspaceTsdk": true,
+	}
+}
