@@ -7,7 +7,7 @@
 // @match         https://seedpool.org/torrents?*
 // @grant         none
 // @inject-into   content
-// @version       0.2.2
+// @version       0.2.3
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
