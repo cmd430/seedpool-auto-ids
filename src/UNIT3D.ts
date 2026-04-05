@@ -9,6 +9,8 @@ export class UNIT3D {
 
   constructor (opts: UNIT3D_Opts) {
     this.api = opts.api
+
+    document.addEventListener('paste', this.onPaste.bind(this))
   }
 
   onPaste (e: ClipboardEvent) {
