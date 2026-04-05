@@ -135,7 +135,7 @@ export default [
   },
   { // eslint Rules
     rules: {
-      'no-console': 'error',
+      'no-console': 'off',
       'no-warning-comments': [
         'warn',
         {
