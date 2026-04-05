@@ -85,7 +85,7 @@ export class API {
       } else if (opts.tvdb_id) {
         return external.tvdbid === opts.tvdb_id
       } else if (external.tmdbid) {
-        return external.tmdbid === external.tmdbid
+        return external.tmdbid === opts.tmdb_id
       }
 
       return false
