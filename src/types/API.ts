@@ -41,12 +41,8 @@ export interface BuildUrlOpts {
 }
 
 export interface ExternalMalIdMap {
-  [index: string]: {
-    tvdb_id?: number
-    tvdb_season?: number
-    tvdb_epoffset?: number
-    imdb_id?: string
-    mal_id: number
-    anilist_id: number
-  }
+  malid: number
+  anidbid?: number
+  tvdbid?: number
+  tmdbid?: number
 }

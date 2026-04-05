@@ -10,41 +10,7 @@ export class API {
   }
 
   async getIds (id: string, source: IdSource, mediaType: MediaType) {
-    let tmdbId = id
-    if (source !== 'tmdb') { // we need to get tmdb id if using another id to start
-      if (source === 'mal') {
-        const malIds = await this.getMalIds(undefined, undefined, Number(id))
-        if (malIds?.tvdb_id) {
-          source = 'tvdb'
-          id = String(malIds.tvdb_id)
-        } else if (malIds?.imdb_id) {
-          source = 'imdb'
-          id = malIds.imdb_id
-        }
-      }
-
-      if (source === 'imdb' && !id.startsWith('tt')) {
-        id = `tt${id.padStart(7, '0')}`
-      }
-
-      const { data, ok } = await obtain<TMDB_FindResponse>(this.buildUrl({
-        path: `find/${id}`,
-        params: {
-          external_source: `${source}_id`
-        }
-      }))
-
-      if (!ok) return
-
-      const { tv_results, movie_results } = data
-      const results = {
-        ...tv_results,
-        ...movie_results
-      }
-
-      tmdbId = results[0]?.id
-    }
-
+    const tmdbId = await this.getTmdbId(source, id)
     if (!tmdbId) return
 
     // lookup external ids using the tmdb id
@@ -53,42 +19,84 @@ export class API {
     }))
     if (!ok) return
 
-    const mal = await this.getMalIds(data.tvdb_id, data.imdb_id)
-    if (!mal || !mal.mal_id) {
-      return {
-        ...data,
-        mal_id: undefined
-      }
-    }
+    // lookup mal id from tmdb and/or tvdb
+    const mal = await this.getMalIds({
+      tmdb_id: data.id,
+      tvdb_id: data.tvdb_id
+    })
 
     return {
       ...data,
-      mal_id: mal.mal_id
+      mal_id: mal?.mal_id ?? null
     }
   }
 
-  async getMalIds (tvdbId?: number, imdbId?: string, malId?: number) {
-    if (!tvdbId && !imdbId && !malId) return
+  async getTmdbId (source: IdSource, id: string) {
+    if (source === 'tmdb') {
+      return id
+    }
 
-    const { data, ok } = await obtain('https://raw.githubusercontent.com/Kometa-Team/Anime-IDs/refs/heads/master/anime_ids.json')
+    if (source === 'mal') {
+      const malIds = await this.getMalIds({ mal_id: Number(id) })
+      if (malIds?.tmdb_id) {
+        return String(malIds.tmdb_id)
+      } else if (malIds?.tvdb_id) {
+        source = 'tvdb'
+        id = String(malIds.tvdb_id)
+      }
+    }
 
+    if (source === 'imdb' && !id.startsWith('tt')) {
+      id = `tt${id.padStart(7, '0')}`
+    }
+
+    const { data, ok } = await obtain<TMDB_FindResponse>(this.buildUrl({
+      path: `find/${id}`,
+      params: {
+        external_source: `${source}_id`
+      }
+    }))
     if (!ok) return
 
-    const externalIdMap = <ExternalMalIdMap>JSON.parse(data)
+    const { tv_results, movie_results } = data
+    const results = {
+      ...tv_results,
+      ...movie_results
+    }
 
-    return Object.values(externalIdMap).find(a => {
-      if (malId) {
-        return a.mal_id === malId
-      } else if (tvdbId && imdbId) {
-        return a.tvdb_id === tvdbId || a.imdb_id === imdbId
-      } else if (tvdbId) {
-        return a.tvdb_id === tvdbId
-      } else if (imdbId) {
-        return a.imdb_id === imdbId
+    return results[0]?.id
+  }
+
+  async getMalIds (opts: {
+    tmdb_id?: number
+    tvdb_id?: number
+    mal_id?: number
+  }) {
+    // mappings from https://github.com/shinkro/community-mapping
+    const { data, ok } = await obtain('https://raw.githubusercontent.com/shinkro/community-mapping/refs/heads/main/shinkrodb/malid-anidbid-tvdbid-tmdbid.json')
+    if (!ok) return
+
+    const externalIdMap = <ExternalMalIdMap[]>JSON.parse(data)
+    const mapped = externalIdMap.find(external => {
+      if (opts.mal_id) {
+        return external.malid === opts.mal_id
+      } else if (opts.tvdb_id && external.tmdbid) {
+        return external.tmdbid === opts.tmdb_id || external.tvdbid === opts.tvdb_id
+      } else if (opts.tvdb_id) {
+        return external.tvdbid === opts.tvdb_id
+      } else if (external.tmdbid) {
+        return external.tmdbid === external.tmdbid
       }
 
       return false
     })
+    if (!mapped) return
+
+    return {
+      mal_id: mapped.malid,
+      tmdb_id: mapped.tmdbid,
+      tvdb_id: mapped.tvdbid
+    }
   }
 
   public get validIdSources(): IdSource[] {
