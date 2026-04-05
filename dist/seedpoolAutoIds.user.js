@@ -7,7 +7,7 @@
 // @match         https://seedpool.org/torrents?*
 // @grant         none
 // @inject-into   content
-// @version       0.2.1
+// @version       0.2.2
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -50,69 +50,73 @@ var API = class {
     this.tmdbKey = opts.tmdbKey;
   }
   async getIds(id, source, mediaType) {
-    let tmdbId = id;
-    if (source !== "tmdb") {
-      if (source === "mal") {
-        const malIds = await this.getMalIds(void 0, void 0, Number(id));
-        if (malIds?.tvdb_id) {
-          source = "tvdb";
-          id = String(malIds.tvdb_id);
-        } else if (malIds?.imdb_id) {
-          source = "imdb";
-          id = malIds.imdb_id;
-        }
-      }
-      if (source === "imdb" && !id.startsWith("tt")) {
-        id = `tt${id.padStart(7, "0")}`;
-      }
-      const { data: data2, ok: ok2 } = await obtain(this.buildUrl({
-        path: `find/${id}`,
-        params: {
-          external_source: `${source}_id`
-        }
-      }));
-      if (!ok2) return;
-      const { tv_results, movie_results } = data2;
-      const results = {
-        ...tv_results,
-        ...movie_results
-      };
-      tmdbId = results[0]?.id;
-    }
+    const tmdbId = await this.getTmdbId(source, id);
     if (!tmdbId) return;
     const { data, ok } = await obtain(this.buildUrl({
       path: `${mediaType}/${tmdbId}/external_ids`
     }));
     if (!ok) return;
-    const mal = await this.getMalIds(data.tvdb_id, data.imdb_id);
-    if (!mal || !mal.mal_id) {
-      return {
-        ...data,
-        mal_id: void 0
-      };
-    }
+    const mal = await this.getMalIds({
+      tmdb_id: data.id,
+      tvdb_id: data.tvdb_id
+    });
     return {
       ...data,
-      mal_id: mal.mal_id
+      mal_id: mal?.mal_id ?? null
     };
   }
-  async getMalIds(tvdbId, imdbId, malId) {
-    if (!tvdbId && !imdbId && !malId) return;
-    const { data, ok } = await obtain("https://raw.githubusercontent.com/Kometa-Team/Anime-IDs/refs/heads/master/anime_ids.json");
+  async getTmdbId(source, id) {
+    if (source === "tmdb") {
+      return id;
+    }
+    if (source === "mal") {
+      const malIds = await this.getMalIds({ mal_id: Number(id) });
+      if (malIds?.tmdb_id) {
+        return String(malIds.tmdb_id);
+      } else if (malIds?.tvdb_id) {
+        source = "tvdb";
+        id = String(malIds.tvdb_id);
+      }
+    }
+    if (source === "imdb" && !id.startsWith("tt")) {
+      id = `tt${id.padStart(7, "0")}`;
+    }
+    const { data, ok } = await obtain(this.buildUrl({
+      path: `find/${id}`,
+      params: {
+        external_source: `${source}_id`
+      }
+    }));
+    if (!ok) return;
+    const { tv_results, movie_results } = data;
+    const results = {
+      ...tv_results,
+      ...movie_results
+    };
+    return results[0]?.id;
+  }
+  async getMalIds(opts) {
+    const { data, ok } = await obtain("https://raw.githubusercontent.com/shinkro/community-mapping/refs/heads/main/shinkrodb/malid-anidbid-tvdbid-tmdbid.json");
     if (!ok) return;
     const externalIdMap = JSON.parse(data);
-    return Object.values(externalIdMap).find((a) => {
-      if (malId) {
-        return a.mal_id === malId;
-      } else if (tvdbId && imdbId) {
-        return a.tvdb_id === tvdbId || a.imdb_id === imdbId;
-      } else if (tvdbId) {
-        return a.tvdb_id === tvdbId;
-      } else if (imdbId) {
-        return a.imdb_id === imdbId;
+    const mapped = externalIdMap.find((external) => {
+      if (opts.mal_id) {
+        return external.malid === opts.mal_id;
+      } else if (opts.tvdb_id && external.tmdbid) {
+        return external.tmdbid === opts.tmdb_id || external.tvdbid === opts.tvdb_id;
+      } else if (opts.tvdb_id) {
+        return external.tvdbid === opts.tvdb_id;
+      } else if (external.tmdbid) {
+        return external.tmdbid === external.tmdbid;
       }
       return false;
     });
+    if (!mapped) return;
+    return {
+      mal_id: mapped.malid,
+      tmdb_id: mapped.tmdbid,
+      tvdb_id: mapped.tvdbid
+    };
   }
   get validIdSources() {
     return ["imdb", "tmdb", "tvdb", "mal"];
@@ -145,6 +149,7 @@ var UNIT3D = class {
   api;
   constructor(opts) {
     this.api = opts.api;
+    document.addEventListener("paste", this.onPaste.bind(this));
   }
   onPaste(e) {
     const input = e.target;
@@ -272,9 +277,8 @@ var UNIT3D = class {
 };
 
 // src/seedpoolAutoIds.ts
-var unit3d = new UNIT3D({
+new UNIT3D({
   api: new API({
     tmdbKey: TMDB_API_KEY
   })
 });
-document.addEventListener("paste", unit3d.onPaste.bind(unit3d));
