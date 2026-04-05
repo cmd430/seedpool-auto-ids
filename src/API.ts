@@ -23,8 +23,12 @@ export class API {
         }
       }
 
+      if (source === 'imdb' && !id.startsWith('tt')) {
+        id = `tt${id.padStart(7, '0')}`
+      }
+
       const { data, ok } = await obtain<TMDB_FindResponse>(this.buildUrl({
-        path: `find/${source === 'imdb' && !id.startsWith('tt') ? `tt${id}` : id}`,
+        path: `find/${id}`,
         params: {
           external_source: `${source}_id`
         }
@@ -33,7 +37,12 @@ export class API {
       if (!ok) return
 
       const { tv_results, movie_results } = data
-      tmdbId = (mediaType === 'tv' ? tv_results : movie_results)[0]?.id
+      const results = {
+        ...tv_results,
+        ...movie_results
+      }
+
+      tmdbId = results[0]?.id
     }
 
     if (!tmdbId) return
@@ -42,7 +51,6 @@ export class API {
     const { data, ok } = await obtain<TMDB_ExternalIdsResponse>(this.buildUrl({
       path: `${mediaType}/${tmdbId}/external_ids`
     }))
-
     if (!ok) return
 
     const mal = await this.getMalIds(data.tvdb_id, data.imdb_id)

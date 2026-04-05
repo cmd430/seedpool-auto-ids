@@ -19,10 +19,10 @@ export class UNIT3D {
 
     e.preventDefault()
 
-    // allow direct paste so it feels good (no delay) but auto remove the imdb 'tt' prefix if present
     const id = e.clipboardData?.getData('text')
     if (!id) return
 
+    // allow direct paste so it feels good (no delay) but auto remove the imdb 'tt' prefix if present
     this.setInputValue(input, id.startsWith('tt') ? id.slice(2) : id)
 
     // get ids
@@ -32,6 +32,8 @@ export class UNIT3D {
       this.editMetadata(idSource, id)
     } else if (location.pathname.includes('similar')) {
       this.bulkEditMetadata(idSource, id)
+    } else if (location.pathname.endsWith('torrents')) {
+      this.bulkEditMetadata(idSource, id, true)
     }
   }
 
@@ -40,9 +42,10 @@ export class UNIT3D {
   }
 
   private async editMetadata (idSource: IdSource, id: string) {
-    const mediaType = this.getMediaTypeFromCategory(document.querySelector('#category_id')!)
-    const ids = await this.api.getIds(id, idSource, mediaType)
+    const mediaType = this.getMediaTypeFromCategory(document.querySelector<HTMLSelectElement>('#category_id')?.value)
+    if (!mediaType) return
 
+    const ids = await this.api.getIds(id, idSource, mediaType)
     if (!ids) return
 
     // auto fill tmdb id
@@ -98,8 +101,13 @@ export class UNIT3D {
     }
   }
 
-  private async bulkEditMetadata (idSource: IdSource, id: string) {
-    const mediaType = this.getMediaTypeFromText(document.querySelector('#swal2-html-container > div > div:first-of-type > label')?.textContent ?? '')
+  private async bulkEditMetadata (idSource: IdSource, id: string, isSearch = false) {
+    let mediaType: MediaType | undefined
+    if (isSearch) {
+      mediaType = this.getMediaTypeFromCategory(document.querySelector<HTMLElement>('.data-table tr[data-torrent-id]:has(input:checked)')?.dataset.categoryId)
+    } else {
+      mediaType = this.getMediaTypeFromText(document.querySelector<HTMLLabelElement>('#swal2-html-container > div > div:first-of-type > label')?.textContent)
+    }
     if (mediaType !== 'tv' && mediaType !== 'movie') return
 
     const ids = await this.api.getIds(id, idSource, mediaType)
@@ -138,11 +146,13 @@ export class UNIT3D {
     }
   }
 
-  private getMediaTypeFromCategory (category: HTMLSelectElement) {
-    return <MediaType>{ 1: 'movie', 2: 'tv' }[category.value]
+  private getMediaTypeFromCategory (category?: string) {
+    if (!category) return
+    return <MediaType>{ 1: 'movie', 2: 'tv', 6: 'tv' }[category]
   }
 
-  private getMediaTypeFromText (text: string) {
+  private getMediaTypeFromText (text?: string) {
+    if (!text) return
     return <MediaType>text.match(/(Movie|TV)/i)?.[1].toLowerCase()
   }
 

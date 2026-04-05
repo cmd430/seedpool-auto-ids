@@ -4,9 +4,10 @@
 // @match         https://seedpool.org/torrents/*/edit
 // @match         https://seedpool.org/torrents/create
 // @match         https://seedpool.org/torrents/similar/*
+// @match         https://seedpool.org/torrents?*
 // @grant         none
 // @inject-into   content
-// @version       0.2.0
+// @version       0.2.1
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -61,15 +62,22 @@ var API = class {
           id = malIds.imdb_id;
         }
       }
+      if (source === "imdb" && !id.startsWith("tt")) {
+        id = `tt${id.padStart(7, "0")}`;
+      }
       const { data: data2, ok: ok2 } = await obtain(this.buildUrl({
-        path: `find/${source === "imdb" && !id.startsWith("tt") ? `tt${id}` : id}`,
+        path: `find/${id}`,
         params: {
           external_source: `${source}_id`
         }
       }));
       if (!ok2) return;
       const { tv_results, movie_results } = data2;
-      tmdbId = (mediaType === "tv" ? tv_results : movie_results)[0]?.id;
+      const results = {
+        ...tv_results,
+        ...movie_results
+      };
+      tmdbId = results[0]?.id;
     }
     if (!tmdbId) return;
     const { data, ok } = await obtain(this.buildUrl({
@@ -152,12 +160,15 @@ var UNIT3D = class {
       this.editMetadata(idSource, id);
     } else if (location.pathname.includes("similar")) {
       this.bulkEditMetadata(idSource, id);
+    } else if (location.pathname.endsWith("torrents")) {
+      this.bulkEditMetadata(idSource, id, true);
     }
   }
   async createMetadata(idSource, id) {
   }
   async editMetadata(idSource, id) {
-    const mediaType = this.getMediaTypeFromCategory(document.querySelector("#category_id"));
+    const mediaType = this.getMediaTypeFromCategory(document.querySelector("#category_id")?.value);
+    if (!mediaType) return;
     const ids = await this.api.getIds(id, idSource, mediaType);
     if (!ids) return;
     const exists_on_tmdb = document.querySelector(`#${mediaType}_exists_on_tmdb`);
@@ -205,8 +216,13 @@ var UNIT3D = class {
       this.setCheckboxChecked(exists_on_mal, false);
     }
   }
-  async bulkEditMetadata(idSource, id) {
-    const mediaType = this.getMediaTypeFromText(document.querySelector("#swal2-html-container > div > div:first-of-type > label")?.textContent ?? "");
+  async bulkEditMetadata(idSource, id, isSearch = false) {
+    let mediaType;
+    if (isSearch) {
+      mediaType = this.getMediaTypeFromCategory(document.querySelector(".data-table tr[data-torrent-id]:has(input:checked)")?.dataset.categoryId);
+    } else {
+      mediaType = this.getMediaTypeFromText(document.querySelector("#swal2-html-container > div > div:first-of-type > label")?.textContent);
+    }
     if (mediaType !== "tv" && mediaType !== "movie") return;
     const ids = await this.api.getIds(id, idSource, mediaType);
     if (!ids) return;
@@ -236,9 +252,11 @@ var UNIT3D = class {
     }
   }
   getMediaTypeFromCategory(category) {
-    return { 1: "movie", 2: "tv" }[category.value];
+    if (!category) return;
+    return { 1: "movie", 2: "tv", 6: "tv" }[category];
   }
   getMediaTypeFromText(text) {
+    if (!text) return;
     return text.match(/(Movie|TV)/i)?.[1].toLowerCase();
   }
   setInputValue(input, value) {

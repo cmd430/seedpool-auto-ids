@@ -4,13 +4,14 @@
   "match": [
     "https://seedpool.org/torrents/*/edit",
     "https://seedpool.org/torrents/create",
-    "https://seedpool.org/torrents/similar/*"
+    "https://seedpool.org/torrents/similar/*",
+    "https://seedpool.org/torrents?*"
   ],
   "grant": [
     "none"
   ],
   "inject-into": "content",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "cmd430",
   "description": "Make adding TV/Movie ids less painful during torrent moderation",
   "run-at": "document-body"
