@@ -11,7 +11,7 @@
     "none"
   ],
   "inject-into": "content",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "author": "cmd430",
   "description": "Make adding TV/Movie ids less painful during torrent moderation",
   "run-at": "document-body"

@@ -7,7 +7,7 @@
 // @match         https://seedpool.org/torrents?*
 // @grant         none
 // @inject-into   content
-// @version       0.2.3
+// @version       0.2.4
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -141,6 +141,18 @@ function wait(delay) {
 }
 __name(wait, "wait");
 
+// src/utils/createElementFromString.ts
+function createElementsFromString(HTMLString) {
+  const range = new Range();
+  const fragment = range.createContextualFragment(HTMLString);
+  return fragment;
+}
+__name(createElementsFromString, "createElementsFromString");
+function createElementFromString(HTMLString) {
+  return createElementsFromString(HTMLString).firstElementChild;
+}
+__name(createElementFromString, "createElementFromString");
+
 // src/UNIT3D.ts
 var UNIT3D = class {
   static {
@@ -149,7 +161,23 @@ var UNIT3D = class {
   api;
   constructor(opts) {
     this.api = opts.api;
+    let selectionEndTimeout;
+    ["mouseup", "selectionchange"].map((e) => {
+      document.addEventListener(e.toString(), (evt) => {
+        if (selectionEndTimeout && evt.type === "selectionchange") {
+          clearTimeout(selectionEndTimeout);
+        }
+        selectionEndTimeout = setTimeout(() => {
+          if (evt.type === "mouseup" && getSelection()?.toString() !== "") {
+            document.dispatchEvent(new Event("selectionend"));
+          }
+        }, 100);
+      });
+    });
     document.addEventListener("paste", this.onPaste.bind(this));
+    this.initQuickSearch();
+    document.addEventListener("selectionchange", this.onSelection.bind(this));
+    document.addEventListener("selectionend", this.onSelection.bind(this));
   }
   onPaste(e) {
     const input = e.target;
@@ -163,102 +191,199 @@ var UNIT3D = class {
       this.createMetadata(idSource, id);
     } else if (location.pathname.endsWith("edit")) {
       this.editMetadata(idSource, id);
-    } else if (location.pathname.includes("similar")) {
+    } else if (location.pathname.includes("similar") || location.pathname.endsWith("torrents")) {
       this.bulkEditMetadata(idSource, id);
-    } else if (location.pathname.endsWith("torrents")) {
-      this.bulkEditMetadata(idSource, id, true);
     }
+  }
+  onSelection(e) {
+    const quickSearch = document.querySelector("#quickSearch");
+    if (!quickSearch) return;
+    const currentSelection = getSelection();
+    if (e.type === "selectionchange" && currentSelection?.toString() !== "") return;
+    if (!currentSelection?.toString() || /^\d+$/.test(currentSelection?.toString().trim())) {
+      quickSearch.style.opacity = "0";
+    } else {
+      let rect;
+      const activeElement = document.activeElement;
+      if (!activeElement) return;
+      if (activeElement.tagName === "TEXTAREA" || activeElement.tagName === "INPUT") {
+        rect = activeElement.getBoundingClientRect();
+      } else if (currentSelection.rangeCount > 0 && currentSelection.toString().trim()) {
+        rect = currentSelection.getRangeAt(0).getBoundingClientRect();
+      }
+      if (!rect) return;
+      const mediaType = this.getMediaType();
+      if (!mediaType) {
+        quickSearch.dataset.type = "tv,movie,game";
+      } else {
+        quickSearch.dataset.type = mediaType;
+      }
+      const top = window.scrollY + rect.bottom + 4;
+      if (top + quickSearch.offsetHeight > window.scrollY + window.innerHeight) {
+        quickSearch.style.top = `${window.scrollY + rect.bottom - quickSearch.offsetHeight - 8}px`;
+      } else {
+        quickSearch.style.top = `${top}px`;
+      }
+      quickSearch.style.left = `${window.scrollX + rect.left}px`;
+      quickSearch.style.opacity = "1";
+    }
+  }
+  initQuickSearch() {
+    const style = createElementFromString(
+      /*html*/
+      `
+      <style>${/*css*/
+      `
+        #quickSearch {
+          position: absolute;
+          z-index: 999999;
+          display: flex;
+          gap: 6px;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          pointer-events: auto;
+          background: var(--body-bg);
+          padding: 5px;
+          border-radius: 12px;
+          border: var(--input-text-border);
+
+          > button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: none;
+            padding: 2px;
+            transition: transform 0.15s ease;
+
+            &:hover {
+              transform: scale(1.24);
+            }
+
+            > img {
+              width: 32px;
+              height: 32px;
+              object-fit: contain;
+            }
+          }
+
+          &[data-type*="tv"] > button[data-types*="tv"] {
+            display: flex;
+          }
+          &[data-type*="movie"] > button[data-types*="movie"] {
+            display: flex;
+          }
+          &[data-type*="game"] > button[data-types*="game"] {
+            display: flex;
+          }
+        }
+      `}</style>
+    `
+    );
+    document.body.appendChild(style);
+    const quickSearch = createElementFromString(
+      /*html*/
+      `
+      <div id="quickSearch" data-type=""></div>
+    `
+    );
+    const sites = [
+      { name: "TMDB", icon: "https://seedpool.org/img/meta/tmdb.svg", bg: "#022541", search(t) {
+        return `https://www.themoviedb.org/search?query=${encodeURIComponent(t)}`;
+      }, types: ["tv", "movie"] },
+      { name: "IMDb", icon: "https://seedpool.org/img/meta/imdb.svg", bg: "#f5c518", search(t) {
+        return `https://www.imdb.com/find?q=${encodeURIComponent(t)}`;
+      }, types: ["tv", "movie"] },
+      { name: "TVDB", icon: "https://seedpool.org/img/meta/tvdb.svg", bg: "#132c3a", search(t) {
+        return `https://www.thetvdb.com/search?query=${encodeURIComponent(t.replace(/\s+\d{4}$/, ""))}`;
+      }, types: ["tv"] },
+      { name: "MAL", icon: "https://seedpool.org/img/meta/mal.svg", bg: "#2e51a2", search(t) {
+        return `https://myanimelist.net/search/all?q=${encodeURIComponent(t)}`;
+      }, types: ["tv"] },
+      { name: "IGDB", icon: "https://seedpool.org/img/meta/igdb.svg", bg: "#9147ff", search(t) {
+        return `https://www.igdb.com/search?q=${encodeURIComponent(t)}`;
+      }, types: ["game"] }
+    ];
+    sites.forEach((site) => {
+      const siteButton = createElementFromString(
+        /*html*/
+        `
+        <button title="${site.name}" style="background: ${site.bg};" data-types="${site.types.join(",")}">
+          <img src="${site.icon}"/>
+        </button>
+      `
+      );
+      siteButton.addEventListener("click", (e) => {
+        const selectedText = getSelection()?.toString();
+        if (!selectedText) return;
+        e.preventDefault();
+        const searchText = selectedText.replace(/[._()[\]{}-]/g, " ").trim();
+        window.open(site.search(searchText), `${site.name} Popup`, "width=1200,height=800,resizable,scrollbars");
+      });
+      quickSearch.appendChild(siteButton);
+    });
+    document.body.appendChild(quickSearch);
   }
   async createMetadata(idSource, id) {
   }
   async editMetadata(idSource, id) {
-    const mediaType = this.getMediaTypeFromCategory(document.querySelector("#category_id")?.value);
-    if (!mediaType) return;
-    const ids = await this.api.getIds(id, idSource, mediaType);
-    if (!ids) return;
-    const exists_on_tmdb = document.querySelector(`#${mediaType}_exists_on_tmdb`);
-    const tmdb_input = document.querySelector(`#tmdb_${mediaType}_id`);
-    if (ids.id) {
-      this.setCheckboxChecked(exists_on_tmdb, true);
-      await wait({ milliseconds: 100 });
-      this.setInputValue(tmdb_input, String(ids.id));
-    } else {
-      this.setInputValue(tmdb_input, "");
-      await wait({ milliseconds: 100 });
-      this.setCheckboxChecked(exists_on_tmdb, false);
-    }
-    const exists_on_imdb = document.querySelector("#title_exists_on_imdb");
-    const imdb_input = document.querySelector("#imdb");
-    if (ids.imdb_id) {
-      this.setCheckboxChecked(exists_on_imdb, true);
-      await wait({ milliseconds: 100 });
-      this.setInputValue(imdb_input, ids.imdb_id.slice(2));
-    } else {
-      this.setInputValue(imdb_input, "");
-      await wait({ milliseconds: 100 });
-      this.setCheckboxChecked(exists_on_imdb, false);
-    }
-    const exists_on_tvdb = document.querySelector("#tv_exists_on_tvdb");
-    const tvdb_input = document.querySelector("#tvdb");
-    if (mediaType === "tv" && ids.tvdb_id) {
-      this.setCheckboxChecked(exists_on_tvdb, true);
-      await wait({ milliseconds: 100 });
-      this.setInputValue(tvdb_input, String(ids.tvdb_id));
-    } else if (mediaType === "tv" && !ids.tvdb_id) {
-      this.setInputValue(tvdb_input, "");
-      await wait({ milliseconds: 100 });
-      this.setCheckboxChecked(exists_on_tvdb, false);
-    }
-    const exists_on_mal = document.querySelector("#anime_exists_on_mal");
-    const mal_input = document.querySelector("#mal");
-    if (ids.mal_id) {
-      this.setCheckboxChecked(exists_on_mal, true);
-      await wait({ milliseconds: 100 });
-      this.setInputValue(mal_input, String(ids.mal_id));
-    } else {
-      this.setInputValue(mal_input, "");
-      await wait({ milliseconds: 100 });
-      this.setCheckboxChecked(exists_on_mal, false);
-    }
-  }
-  async bulkEditMetadata(idSource, id, isSearch = false) {
-    let mediaType;
-    if (isSearch) {
-      mediaType = this.getMediaTypeFromCategory(document.querySelector(".data-table tr[data-torrent-id]:has(input:checked)")?.dataset.categoryId);
-    } else {
-      mediaType = this.getMediaTypeFromText(document.querySelector("#swal2-html-container > div > div:first-of-type > label")?.textContent);
-    }
+    const mediaType = this.getMediaType();
     if (mediaType !== "tv" && mediaType !== "movie") return;
     const ids = await this.api.getIds(id, idSource, mediaType);
     if (!ids) return;
-    const tmdb_input = document.querySelector("#bulk-tmdb-id");
-    if (ids.id) {
-      this.setInputValue(tmdb_input, String(ids.id));
+    await this.editId(`#${mediaType}_exists_on_tmdb`, `#tmdb_${mediaType}_id`, ids.id);
+    await this.editId("#title_exists_on_imdb", "#imdb", ids.imdb_id?.slice(2));
+    await this.editId("#tv_exists_on_tvdb", "#tvdb", ids.tvdb_id);
+    await this.editId("#anime_exists_on_mal", "#mal", ids.mal_id);
+  }
+  async editId(existsSelector, inputSelector, id) {
+    const exists = document.querySelector(existsSelector);
+    const input = document.querySelector(inputSelector);
+    if (id) {
+      this.setCheckboxChecked(exists, true);
+      await wait({ milliseconds: 100 });
+      this.setInputValue(input, String(id));
     } else {
-      this.setInputValue(tmdb_input, "");
-    }
-    const imdb_input = document.querySelector("#bulk-imdb-id");
-    if (ids.imdb_id) {
-      this.setInputValue(imdb_input, ids.imdb_id.slice(2));
-    } else {
-      this.setInputValue(imdb_input, "");
-    }
-    const tvdb_input = document.querySelector("#bulk-tvdb-id");
-    if (mediaType === "tv" && ids.tvdb_id) {
-      this.setInputValue(tvdb_input, String(ids.tvdb_id));
-    } else if (mediaType === "tv" && !ids.tvdb_id) {
-      this.setInputValue(tvdb_input, "");
-    }
-    const mal_input = document.querySelector("#bulk-mal-id");
-    if (ids.mal_id) {
-      this.setInputValue(mal_input, String(ids.mal_id));
-    } else {
-      this.setInputValue(mal_input, "");
+      this.setInputValue(input, "");
+      await wait({ milliseconds: 100 });
+      this.setCheckboxChecked(exists, false);
     }
   }
-  getMediaTypeFromCategory(category) {
+  async bulkEditMetadata(idSource, id) {
+    const mediaType = this.getMediaType();
+    if (mediaType !== "tv" && mediaType !== "movie") return;
+    const ids = await this.api.getIds(id, idSource, mediaType);
+    if (!ids) return;
+    await this.bulkEditId("#bulk-tmdb-id", ids.id);
+    await this.bulkEditId("#bulk-imdb-id", ids.imdb_id?.slice(2));
+    await this.bulkEditId("#bulk-tvdb-id", ids.tvdb_id);
+    await this.bulkEditId("#bulk-mal-id", ids.mal_id);
+  }
+  async bulkEditId(inputSelector, id) {
+    const input = document.querySelector(inputSelector);
+    if (id) {
+      this.setInputValue(input, String(id));
+    } else {
+      this.setInputValue(input, "");
+    }
+  }
+  getMediaType() {
+    let mediaType = this.getMediaTypeFromCategoryId(document.querySelector("#category_id")?.value);
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".data-table tr[data-torrent-id]:has(input:checked)")?.dataset.categoryId);
+    }
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromText(document.querySelector("#swal2-html-container > div > div:first-of-type > label")?.textContent);
+    }
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".work__media-type-link")?.href.slice(-1));
+    }
+    return mediaType;
+  }
+  getMediaTypeFromCategoryId(category) {
     if (!category) return;
-    return { 1: "movie", 2: "tv", 6: "tv" }[category];
+    return { 1: "movie", 2: "tv", 3: "game", 6: "tv" }[category];
   }
   getMediaTypeFromText(text) {
     if (!text) return;
