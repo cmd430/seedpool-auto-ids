@@ -7,6 +7,7 @@ import { createElementFromString } from './utils/createElementFromString'
 export class UNIT3D {
 
   private api: API
+  private textSelection?: string
 
   constructor (opts: UNIT3D_Opts) {
     this.api = opts.api
@@ -69,7 +70,10 @@ export class UNIT3D {
 
     if (!currentSelection?.toString() || /^\d+$/.test(currentSelection?.toString().trim())) {
       quickSearch.style.opacity = '0'
+      this.textSelection = ''
     } else {
+      if (e.type === 'selectionend' && this.textSelection === currentSelection?.toString()) return
+
       let rect: {
         top: number,
         left: number,
@@ -87,7 +91,6 @@ export class UNIT3D {
       }
       if (!rect) return
 
-
       const mediaType = this.getMediaType()
       if (!mediaType) {
         quickSearch.dataset.type = 'tv,movie,game'
@@ -102,6 +105,8 @@ export class UNIT3D {
         quickSearch.style.top = `${top}px`
       }
       quickSearch.style.left = `${window.scrollX + rect.left}px`
+
+      this.textSelection = currentSelection?.toString()
       quickSearch.style.opacity = '1'
     }
   }
@@ -163,7 +168,7 @@ export class UNIT3D {
 
     const sites = [
       { name: 'TMDB', icon: 'https://seedpool.org/img/meta/tmdb.svg', bg:'#022541', search (t: string) {
-        return `https://www.themoviedb.org/search?query=${encodeURIComponent(t)}`
+        return `https://www.themoviedb.org/search?query=${encodeURIComponent(t.replace(/(\s+)(\d{4})$/, '$1 y:$2').replace(/y:$/, ''))}`
       }, types: [ 'tv', 'movie' ] },
       { name: 'IMDb', icon: 'https://seedpool.org/img/meta/imdb.svg', bg:'#f5c518' , search (t: string) {
         return `https://www.imdb.com/find?q=${encodeURIComponent(t)}`
@@ -173,11 +178,18 @@ export class UNIT3D {
       }, types: [ 'tv' ] },
       { name: 'MAL', icon: 'https://seedpool.org/img/meta/mal.svg', bg:'#2e51a2' , search (t: string) {
         return `https://myanimelist.net/search/all?q=${encodeURIComponent(t)}`
-      }, types: [ 'tv' ] },
+      }, types: [ 'tv', 'movie' ] },
       { name: 'IGDB', icon: 'https://seedpool.org/img/meta/igdb.svg', bg:'#9147ff' , search (t: string) {
         return `https://www.igdb.com/search?q=${encodeURIComponent(t)}`
       }, types: [ 'game' ] }
     ]
+
+    const getSearchText = () => {
+      const selectedText = getSelection()?.toString()
+      if (!selectedText) return
+
+      return selectedText.replace(/[._()[\]{}-]/g, ' ').trim()
+    }
 
     sites.forEach(site => {
       const siteButton = createElementFromString(/*html*/`
@@ -187,13 +199,21 @@ export class UNIT3D {
       `)
 
       siteButton.addEventListener('click', e => {
-        const selectedText = getSelection()?.toString()
-        if (!selectedText) return
+        const searchText = getSearchText()
+        if (!searchText) return
 
         e.preventDefault()
 
-        const searchText = selectedText.replace(/[._()[\]{}-]/g, ' ').trim()
-        window.open(site.search(searchText), `${site.name} Popup`, 'width=1200,height=800,resizable,scrollbars');
+        window.open(site.search(searchText), `${site.name} Popup`, 'width=1200,height=800,resizable,scrollbars')?.focus();
+      })
+
+      siteButton.addEventListener('contextmenu', e => {
+        const searchText = getSearchText()
+        if (!searchText) return
+
+        e.preventDefault()
+
+        window.open(site.search(searchText), '_blank')?.focus();
       })
 
       quickSearch.appendChild(siteButton)
@@ -203,7 +223,7 @@ export class UNIT3D {
   }
 
   private async createMetadata (idSource: IdSource, id: string) {
-    // noop might add later
+    return this.editMetadata(idSource, id)
   }
 
   private async editMetadata (idSource: IdSource, id: string) {
@@ -215,8 +235,11 @@ export class UNIT3D {
 
     await this.editId(`#${mediaType}_exists_on_tmdb`, `#tmdb_${mediaType}_id`, ids.id)
     await this.editId('#title_exists_on_imdb', '#imdb', ids.imdb_id?.slice(2))
+    await this.editId('#title_exists_on_imdb', '#autoimdb', ids.imdb_id?.slice(2))
     await this.editId('#tv_exists_on_tvdb', '#tvdb', ids.tvdb_id)
+    await this.editId('#tv_exists_on_tvdb', '#autotvdb', ids.tvdb_id)
     await this.editId('#anime_exists_on_mal', '#mal', ids.mal_id)
+    await this.editId('#anime_exists_on_mal', '#automal', ids.mal_id)
   }
 
   private async editId (existsSelector: string, inputSelector: string, id: string | number | undefined | null) {
@@ -270,7 +293,10 @@ export class UNIT3D {
 
     if (!mediaType) {
       mediaType = this.getMediaTypeFromCategoryId(document.querySelector<HTMLAnchorElement>('.work__media-type-link')?.href.slice(-1))
+    }
 
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector<HTMLSelectElement>('#autocat')?.value)
     }
 
     return mediaType

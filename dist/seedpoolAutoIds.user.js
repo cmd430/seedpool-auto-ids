@@ -1,13 +1,10 @@
 // ==UserScript==
 // @name          Seedpool Auto TV/Movie IDs
 // @namespace     github.com/cmd430
-// @match         https://seedpool.org/torrents/*/edit
-// @match         https://seedpool.org/torrents/create
-// @match         https://seedpool.org/torrents/similar/*
-// @match         https://seedpool.org/torrents?*
+// @match         https://seedpool.org/*
 // @grant         none
 // @inject-into   content
-// @version       0.2.4
+// @version       0.2.5
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -159,6 +156,7 @@ var UNIT3D = class {
     __name(this, "UNIT3D");
   }
   api;
+  textSelection;
   constructor(opts) {
     this.api = opts.api;
     let selectionEndTimeout;
@@ -202,7 +200,9 @@ var UNIT3D = class {
     if (e.type === "selectionchange" && currentSelection?.toString() !== "") return;
     if (!currentSelection?.toString() || /^\d+$/.test(currentSelection?.toString().trim())) {
       quickSearch.style.opacity = "0";
+      this.textSelection = "";
     } else {
+      if (e.type === "selectionend" && this.textSelection === currentSelection?.toString()) return;
       let rect;
       const activeElement = document.activeElement;
       if (!activeElement) return;
@@ -225,6 +225,7 @@ var UNIT3D = class {
         quickSearch.style.top = `${top}px`;
       }
       quickSearch.style.left = `${window.scrollX + rect.left}px`;
+      this.textSelection = currentSelection?.toString();
       quickSearch.style.opacity = "1";
     }
   }
@@ -290,7 +291,7 @@ var UNIT3D = class {
     );
     const sites = [
       { name: "TMDB", icon: "https://seedpool.org/img/meta/tmdb.svg", bg: "#022541", search(t) {
-        return `https://www.themoviedb.org/search?query=${encodeURIComponent(t)}`;
+        return `https://www.themoviedb.org/search?query=${encodeURIComponent(t.replace(/(\s+)(\d{4})$/, "$1 y:$2").replace(/y:$/, ""))}`;
       }, types: ["tv", "movie"] },
       { name: "IMDb", icon: "https://seedpool.org/img/meta/imdb.svg", bg: "#f5c518", search(t) {
         return `https://www.imdb.com/find?q=${encodeURIComponent(t)}`;
@@ -300,11 +301,16 @@ var UNIT3D = class {
       }, types: ["tv"] },
       { name: "MAL", icon: "https://seedpool.org/img/meta/mal.svg", bg: "#2e51a2", search(t) {
         return `https://myanimelist.net/search/all?q=${encodeURIComponent(t)}`;
-      }, types: ["tv"] },
+      }, types: ["tv", "movie"] },
       { name: "IGDB", icon: "https://seedpool.org/img/meta/igdb.svg", bg: "#9147ff", search(t) {
         return `https://www.igdb.com/search?q=${encodeURIComponent(t)}`;
       }, types: ["game"] }
     ];
+    const getSearchText = /* @__PURE__ */ __name(() => {
+      const selectedText = getSelection()?.toString();
+      if (!selectedText) return;
+      return selectedText.replace(/[._()[\]{}-]/g, " ").trim();
+    }, "getSearchText");
     sites.forEach((site) => {
       const siteButton = createElementFromString(
         /*html*/
@@ -315,17 +321,23 @@ var UNIT3D = class {
       `
       );
       siteButton.addEventListener("click", (e) => {
-        const selectedText = getSelection()?.toString();
-        if (!selectedText) return;
+        const searchText = getSearchText();
+        if (!searchText) return;
         e.preventDefault();
-        const searchText = selectedText.replace(/[._()[\]{}-]/g, " ").trim();
-        window.open(site.search(searchText), `${site.name} Popup`, "width=1200,height=800,resizable,scrollbars");
+        window.open(site.search(searchText), `${site.name} Popup`, "width=1200,height=800,resizable,scrollbars")?.focus();
+      });
+      siteButton.addEventListener("contextmenu", (e) => {
+        const searchText = getSearchText();
+        if (!searchText) return;
+        e.preventDefault();
+        window.open(site.search(searchText), "_blank")?.focus();
       });
       quickSearch.appendChild(siteButton);
     });
     document.body.appendChild(quickSearch);
   }
   async createMetadata(idSource, id) {
+    return this.editMetadata(idSource, id);
   }
   async editMetadata(idSource, id) {
     const mediaType = this.getMediaType();
@@ -334,8 +346,11 @@ var UNIT3D = class {
     if (!ids) return;
     await this.editId(`#${mediaType}_exists_on_tmdb`, `#tmdb_${mediaType}_id`, ids.id);
     await this.editId("#title_exists_on_imdb", "#imdb", ids.imdb_id?.slice(2));
+    await this.editId("#title_exists_on_imdb", "#autoimdb", ids.imdb_id?.slice(2));
     await this.editId("#tv_exists_on_tvdb", "#tvdb", ids.tvdb_id);
+    await this.editId("#tv_exists_on_tvdb", "#autotvdb", ids.tvdb_id);
     await this.editId("#anime_exists_on_mal", "#mal", ids.mal_id);
+    await this.editId("#anime_exists_on_mal", "#automal", ids.mal_id);
   }
   async editId(existsSelector, inputSelector, id) {
     const exists = document.querySelector(existsSelector);
@@ -379,6 +394,9 @@ var UNIT3D = class {
     if (!mediaType) {
       mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".work__media-type-link")?.href.slice(-1));
     }
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector("#autocat")?.value);
+    }
     return mediaType;
   }
   getMediaTypeFromCategoryId(category) {
@@ -402,8 +420,19 @@ var UNIT3D = class {
 };
 
 // src/seedpoolAutoIds.ts
-new UNIT3D({
-  api: new API({
-    tmdbKey: TMDB_API_KEY
-  })
-});
+var validPages = [
+  /\/torrents$/,
+  /\/torrents\/\d+$/,
+  /\/similar\/[\d.]+$/,
+  /\/edit$/,
+  /\/create$/
+];
+var unit3d;
+for (const page of validPages) {
+  if (!page.test(location.pathname) || unit3d) continue;
+  unit3d = new UNIT3D({
+    api: new API({
+      tmdbKey: TMDB_API_KEY
+    })
+  });
+}
