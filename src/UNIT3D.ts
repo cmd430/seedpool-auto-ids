@@ -100,7 +100,7 @@ export class UNIT3D {
 
       const top = window.scrollY + rect.bottom + 4
       if (top + quickSearch.offsetHeight > window.scrollY + window.innerHeight) {
-        quickSearch.style.top = `${window.scrollY + rect.bottom - quickSearch.offsetHeight - 8}px`
+        quickSearch.style.top = `${window.scrollY + rect.top - (quickSearch.getBoundingClientRect().height + 4)}px`
       } else {
         quickSearch.style.top = `${top}px`
       }

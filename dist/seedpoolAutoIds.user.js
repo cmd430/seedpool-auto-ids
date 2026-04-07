@@ -3,8 +3,9 @@
 // @namespace     github.com/cmd430
 // @match         https://seedpool.org/*
 // @grant         none
+// @icon          https://seedpool.org/favicon.ico
 // @inject-into   content
-// @version       0.2.5
+// @version       0.2.6
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -220,7 +221,7 @@ var UNIT3D = class {
       }
       const top = window.scrollY + rect.bottom + 4;
       if (top + quickSearch.offsetHeight > window.scrollY + window.innerHeight) {
-        quickSearch.style.top = `${window.scrollY + rect.bottom - quickSearch.offsetHeight - 8}px`;
+        quickSearch.style.top = `${window.scrollY + rect.top - (quickSearch.getBoundingClientRect().height + 4)}px`;
       } else {
         quickSearch.style.top = `${top}px`;
       }
