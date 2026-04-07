@@ -2,10 +2,7 @@
   "name": "Seedpool Auto TV/Movie IDs",
   "namespace": "github.com/cmd430",
   "match": [
-    "https://seedpool.org/torrents/*/edit",
-    "https://seedpool.org/torrents/create",
-    "https://seedpool.org/torrents/similar/*",
-    "https://seedpool.org/torrents?*"
+    "https://seedpool.org/*"
   ],
   "grant": [
     "none"
