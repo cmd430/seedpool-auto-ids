@@ -9,7 +9,7 @@
   ],
   "icon": "https://seedpool.org/favicon.ico",
   "inject-into": "content",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "author": "cmd430",
   "description": "Make adding TV/Movie ids less painful during torrent moderation",
   "run-at": "document-body"

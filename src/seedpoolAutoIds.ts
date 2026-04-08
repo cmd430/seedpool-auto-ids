@@ -1,5 +1,6 @@
 import { TMDB_API_KEY } from './secrets'
 import { API } from './API'
+import { GUI } from './GUI'
 import { UNIT3D } from './UNIT3D'
 
 const validPages = [
@@ -18,6 +19,7 @@ for (const page of validPages) {
   unit3d = new UNIT3D({
     api: new API({
       tmdbKey: TMDB_API_KEY
-    })
+    }),
+    gui: new GUI()
   })
 }

@@ -5,7 +5,7 @@
 // @grant         none
 // @icon          https://seedpool.org/favicon.ico
 // @inject-into   content
-// @version       0.2.6
+// @version       0.2.7
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -130,15 +130,6 @@ var API = class {
   }
 };
 
-// src/utils/wait.ts
-function wait(delay) {
-  const { promise, resolve } = Promise.withResolvers();
-  const { minutes = 0, seconds = 0, milliseconds = 0 } = delay;
-  setTimeout(resolve, 1e3 * 60 * minutes + 1e3 * seconds + milliseconds);
-  return promise;
-}
-__name(wait, "wait");
-
 // src/utils/createElementFromString.ts
 function createElementsFromString(HTMLString) {
   const range = new Range();
@@ -151,48 +142,15 @@ function createElementFromString(HTMLString) {
 }
 __name(createElementFromString, "createElementFromString");
 
-// src/UNIT3D.ts
-var UNIT3D = class {
+// src/GUI.ts
+var GUI = class {
   static {
-    __name(this, "UNIT3D");
+    __name(this, "GUI");
   }
-  api;
   textSelection;
-  constructor(opts) {
-    this.api = opts.api;
-    let selectionEndTimeout;
-    ["mouseup", "selectionchange"].map((e) => {
-      document.addEventListener(e.toString(), (evt) => {
-        if (selectionEndTimeout && evt.type === "selectionchange") {
-          clearTimeout(selectionEndTimeout);
-        }
-        selectionEndTimeout = setTimeout(() => {
-          if (evt.type === "mouseup" && getSelection()?.toString() !== "") {
-            document.dispatchEvent(new Event("selectionend"));
-          }
-        }, 100);
-      });
-    });
-    document.addEventListener("paste", this.onPaste.bind(this));
-    this.initQuickSearch();
+  constructor() {
     document.addEventListener("selectionchange", this.onSelection.bind(this));
     document.addEventListener("selectionend", this.onSelection.bind(this));
-  }
-  onPaste(e) {
-    const input = e.target;
-    const idSource = input.id.match(/(?:(?:auto_?)|bulk-)?(\w{4}|mal)/)?.[1];
-    if (!idSource || !this.api.validIdSources.includes(idSource)) return;
-    e.preventDefault();
-    const id = e.clipboardData?.getData("text");
-    if (!id) return;
-    this.setInputValue(input, id.startsWith("tt") ? id.slice(2) : id);
-    if (location.pathname.endsWith("create")) {
-      this.createMetadata(idSource, id);
-    } else if (location.pathname.endsWith("edit")) {
-      this.editMetadata(idSource, id);
-    } else if (location.pathname.includes("similar") || location.pathname.endsWith("torrents")) {
-      this.bulkEditMetadata(idSource, id);
-    }
   }
   onSelection(e) {
     const quickSearch = document.querySelector("#quickSearch");
@@ -202,6 +160,7 @@ var UNIT3D = class {
     if (!currentSelection?.toString() || /^\d+$/.test(currentSelection?.toString().trim())) {
       quickSearch.style.opacity = "0";
       this.textSelection = "";
+      this.siteButtons.forEach((button) => button.classList.remove("selected"));
     } else {
       if (e.type === "selectionend" && this.textSelection === currentSelection?.toString()) return;
       let rect;
@@ -230,7 +189,57 @@ var UNIT3D = class {
       quickSearch.style.opacity = "1";
     }
   }
-  initQuickSearch() {
+  getMediaType() {
+    let mediaType = this.getMediaTypeFromCategoryId(document.querySelector("#category_id")?.value);
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".data-table tr[data-torrent-id]:has(input:checked)")?.dataset.categoryId);
+    }
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromText(document.querySelector("#swal2-html-container > div > div:first-of-type > label")?.textContent);
+    }
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".work__media-type-link")?.href.slice(-1));
+    }
+    if (!mediaType) {
+      mediaType = this.getMediaTypeFromCategoryId(document.querySelector("#autocat")?.value);
+    }
+    return mediaType;
+  }
+  setInputValue(input, value) {
+    if (!input) return;
+    input.value = value ?? "";
+    input.dispatchEvent(new Event("change"));
+  }
+  setCheckboxChecked(checkbox, checked) {
+    if (!checkbox) return;
+    checkbox.checked = checked;
+    checkbox.dispatchEvent(new Event("change"));
+  }
+  get siteButtons() {
+    return document.querySelectorAll("#quickSearch > button");
+  }
+  getMediaTypeFromCategoryId(category) {
+    if (!category) return;
+    return { 1: "movie", 2: "tv", 3: "game", 6: "tv" }[category];
+  }
+  getMediaTypeFromText(text) {
+    if (!text) return;
+    return text.match(/(Movie|TV)/i)?.[1].toLowerCase();
+  }
+  static {
+    let selectionEndTimeout;
+    ["mouseup", "selectionchange"].map((e) => {
+      document.addEventListener(e.toString(), (evt) => {
+        if (selectionEndTimeout && evt.type === "selectionchange") {
+          clearTimeout(selectionEndTimeout);
+        }
+        selectionEndTimeout = setTimeout(() => {
+          if (evt.type === "mouseup" && getSelection()?.toString() !== "") {
+            document.dispatchEvent(new Event("selectionend"));
+          }
+        }, 100);
+      });
+    });
     const style = createElementFromString(
       /*html*/
       `
@@ -258,15 +267,44 @@ var UNIT3D = class {
             display: none;
             padding: 2px;
             transition: transform 0.15s ease;
+            overflow: clip;
+
+            &.selected {
+              outline: 2px solid var(--color-green);
+            }
 
             &:hover {
               transform: scale(1.24);
             }
 
-            > img {
+            &#quickSearchMultiConfirm {
+              display: none;
+            }
+
+            > img, > svg {
               width: 32px;
               height: 32px;
               object-fit: contain;
+              fill: #FFFFFF;
+            }
+          }
+
+          span.divider {
+            width: 1px;
+            height: 20px;
+            align-self: center;
+            border-radius: 1px;
+            background: var(--label-fg);
+            display: none;
+          }
+
+          &:has(button.selected) {
+            > span.divider {
+              display: flex;
+            }
+
+            > #quickSearchMultiConfirm {
+              display: flex;
             }
           }
 
@@ -291,32 +329,78 @@ var UNIT3D = class {
     `
     );
     const sites = [
-      { name: "TMDB", icon: "https://seedpool.org/img/meta/tmdb.svg", bg: "#022541", search(t) {
-        return `https://www.themoviedb.org/search?query=${encodeURIComponent(t.replace(/(\s+)(\d{4})$/, "$1 y:$2").replace(/y:$/, ""))}`;
-      }, types: ["tv", "movie"] },
-      { name: "IMDb", icon: "https://seedpool.org/img/meta/imdb.svg", bg: "#f5c518", search(t) {
-        return `https://www.imdb.com/find?q=${encodeURIComponent(t)}`;
-      }, types: ["tv", "movie"] },
-      { name: "TVDB", icon: "https://seedpool.org/img/meta/tvdb.svg", bg: "#132c3a", search(t) {
-        return `https://www.thetvdb.com/search?query=${encodeURIComponent(t.replace(/\s+\d{4}$/, ""))}`;
-      }, types: ["tv"] },
-      { name: "MAL", icon: "https://seedpool.org/img/meta/mal.svg", bg: "#2e51a2", search(t) {
-        return `https://myanimelist.net/search/all?q=${encodeURIComponent(t)}`;
-      }, types: ["tv", "movie"] },
-      { name: "IGDB", icon: "https://seedpool.org/img/meta/igdb.svg", bg: "#9147ff", search(t) {
-        return `https://www.igdb.com/search?q=${encodeURIComponent(t)}`;
-      }, types: ["game"] }
+      {
+        id: "tmdb",
+        name: "The MovieDB",
+        icon: "https://seedpool.org/img/meta/tmdb.svg",
+        bg: "#022541",
+        search(t) {
+          return `https://www.themoviedb.org/search?query=${encodeURIComponent(t.replace(/(\s+)(\d{4})$/, "$1 y:$2").replace(/y:$/, ""))}`;
+        },
+        types: ["tv", "movie"]
+      },
+      {
+        id: "imdb",
+        name: "IMDb",
+        icon: "https://seedpool.org/img/meta/imdb.svg",
+        bg: "#f5c518",
+        search(t) {
+          return `https://www.imdb.com/find?q=${encodeURIComponent(t)}`;
+        },
+        types: ["tv", "movie"]
+      },
+      {
+        id: "tmdb",
+        name: "TheTVDB",
+        icon: "https://seedpool.org/img/meta/tvdb.svg",
+        bg: "#1b2626",
+        search(t) {
+          return `https://www.thetvdb.com/search?query=${encodeURIComponent(t.replace(/\s+\d{4}$/, ""))}`;
+        },
+        types: ["tv"]
+      },
+      {
+        id: "mal",
+        name: "MyAnimeList",
+        icon: "https://seedpool.org/img/meta/mal.svg",
+        bg: "#2e51a2",
+        search(t) {
+          return `https://myanimelist.net/search/all?q=${encodeURIComponent(t)}`;
+        },
+        types: ["tv", "movie"]
+      },
+      {
+        id: "igdb",
+        name: "The Internet Game Database",
+        icon: "https://seedpool.org/img/meta/igdb.svg",
+        bg: "#9147ff",
+        search(t) {
+          return `https://www.igdb.com/search?q=${encodeURIComponent(t)}`;
+        },
+        types: ["game"]
+      },
+      {
+        id: "sp",
+        name: "Seedpool",
+        icon: "https://seedpool.org/favicon.ico",
+        bg: "#000000",
+        search(t) {
+          return `https://seedpool.org/torrents?name=${encodeURIComponent(t.replace(/\s+/g, "."))}`;
+        },
+        types: ["tv", "movie", "game"]
+      }
     ];
     const getSearchText = /* @__PURE__ */ __name(() => {
       const selectedText = getSelection()?.toString();
       if (!selectedText) return;
       return selectedText.replace(/[._()[\]{}-]/g, " ").trim();
     }, "getSearchText");
+    const siteButtons = [];
     sites.forEach((site) => {
       const siteButton = createElementFromString(
         /*html*/
         `
-        <button title="${site.name}" style="background: ${site.bg};" data-types="${site.types.join(",")}">
+        <button id="${site.id}" title="Search ${site.name}" style="background: ${site.bg};" data-types="${site.types.join(",")}">
           <img src="${site.icon}"/>
         </button>
       `
@@ -325,23 +409,99 @@ var UNIT3D = class {
         const searchText = getSearchText();
         if (!searchText) return;
         e.preventDefault();
-        window.open(site.search(searchText), `${site.name} Popup`, "width=1200,height=800,resizable,scrollbars")?.focus();
-      });
-      siteButton.addEventListener("contextmenu", (e) => {
-        const searchText = getSearchText();
-        if (!searchText) return;
-        e.preventDefault();
-        window.open(site.search(searchText), "_blank")?.focus();
+        if (e.shiftKey) {
+          return siteButton.classList.toggle("selected");
+        }
+        if (e.isTrusted) {
+          for (const siteButton2 of siteButtons) {
+            if (!siteButton2.classList.contains("selected")) continue;
+            return siteButtons.forEach((button) => button.classList.remove("selected"));
+          }
+        }
+        if (e.ctrlKey) {
+          return window.open(site.search(searchText), "_blank");
+        }
+        window.open(site.search(searchText), `${site.name} Popup`, "width=1200,height=800,resizable,scrollbars");
       });
       quickSearch.appendChild(siteButton);
+      siteButtons.push(siteButton);
     });
+    const divider = createElementFromString(
+      /*html*/
+      `
+      <span class="divider"></span>
+    `
+    );
+    quickSearch.appendChild(divider);
+    const multiButton = createElementFromString(
+      /*html*/
+      `
+      <button id="quickSearchMultiConfirm" title="Open Selected" style="background: #4caf50" data-types="tv,movie,game">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+          <path d="M42 8.6a2 2 0 0 0-1.7 1L21.5 38.3 9.3 27.8a2 2 0 0 0-3.4 1 2 2 0 0 0 .8 2l14 12a2 2 0 0 0 2.9-.4l20-30.6A2 2 0 0 0 42 8.6"/>
+        </svg>
+      </button>
+    `
+    );
+    multiButton.addEventListener("click", (e) => {
+      const searchText = getSearchText();
+      if (!searchText) return;
+      e.preventDefault();
+      for (const siteButton of siteButtons) {
+        if (!siteButton.classList.contains("selected")) continue;
+        siteButton?.dispatchEvent(new PointerEvent("click", {
+          ctrlKey: e.ctrlKey
+        }));
+      }
+      siteButtons.forEach((button) => button.classList.remove("selected"));
+    });
+    quickSearch.appendChild(multiButton);
     document.body.appendChild(quickSearch);
+  }
+};
+
+// src/utils/wait.ts
+function wait(delay) {
+  const { promise, resolve } = Promise.withResolvers();
+  const { minutes = 0, seconds = 0, milliseconds = 0 } = delay;
+  setTimeout(resolve, 1e3 * 60 * minutes + 1e3 * seconds + milliseconds);
+  return promise;
+}
+__name(wait, "wait");
+
+// src/UNIT3D.ts
+var UNIT3D = class {
+  static {
+    __name(this, "UNIT3D");
+  }
+  api;
+  gui;
+  constructor(opts) {
+    this.api = opts.api;
+    this.gui = opts.gui;
+    document.addEventListener("paste", this.onPaste.bind(this));
+  }
+  onPaste(e) {
+    const input = e.target;
+    const idSource = input.id.match(/(?:(?:auto_?)|bulk-)?(\w{4}|mal)/)?.[1];
+    if (!idSource || !this.api.validIdSources.includes(idSource)) return;
+    e.preventDefault();
+    const id = e.clipboardData?.getData("text");
+    if (!id) return;
+    this.gui.setInputValue(input, id.startsWith("tt") ? id.slice(2) : id);
+    if (location.pathname.endsWith("create")) {
+      this.createMetadata(idSource, id);
+    } else if (location.pathname.endsWith("edit")) {
+      this.editMetadata(idSource, id);
+    } else if (location.pathname.includes("similar") || location.pathname.endsWith("torrents")) {
+      this.bulkEditMetadata(idSource, id);
+    }
   }
   async createMetadata(idSource, id) {
     return this.editMetadata(idSource, id);
   }
   async editMetadata(idSource, id) {
-    const mediaType = this.getMediaType();
+    const mediaType = this.gui.getMediaType();
     if (mediaType !== "tv" && mediaType !== "movie") return;
     const ids = await this.api.getIds(id, idSource, mediaType);
     if (!ids) return;
@@ -357,17 +517,17 @@ var UNIT3D = class {
     const exists = document.querySelector(existsSelector);
     const input = document.querySelector(inputSelector);
     if (id) {
-      this.setCheckboxChecked(exists, true);
+      this.gui.setCheckboxChecked(exists, true);
       await wait({ milliseconds: 100 });
-      this.setInputValue(input, String(id));
+      this.gui.setInputValue(input, String(id));
     } else {
-      this.setInputValue(input, "");
+      this.gui.setInputValue(input, "");
       await wait({ milliseconds: 100 });
-      this.setCheckboxChecked(exists, false);
+      this.gui.setCheckboxChecked(exists, false);
     }
   }
   async bulkEditMetadata(idSource, id) {
-    const mediaType = this.getMediaType();
+    const mediaType = this.gui.getMediaType();
     if (mediaType !== "tv" && mediaType !== "movie") return;
     const ids = await this.api.getIds(id, idSource, mediaType);
     if (!ids) return;
@@ -379,44 +539,10 @@ var UNIT3D = class {
   async bulkEditId(inputSelector, id) {
     const input = document.querySelector(inputSelector);
     if (id) {
-      this.setInputValue(input, String(id));
+      this.gui.setInputValue(input, String(id));
     } else {
-      this.setInputValue(input, "");
+      this.gui.setInputValue(input, "");
     }
-  }
-  getMediaType() {
-    let mediaType = this.getMediaTypeFromCategoryId(document.querySelector("#category_id")?.value);
-    if (!mediaType) {
-      mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".data-table tr[data-torrent-id]:has(input:checked)")?.dataset.categoryId);
-    }
-    if (!mediaType) {
-      mediaType = this.getMediaTypeFromText(document.querySelector("#swal2-html-container > div > div:first-of-type > label")?.textContent);
-    }
-    if (!mediaType) {
-      mediaType = this.getMediaTypeFromCategoryId(document.querySelector(".work__media-type-link")?.href.slice(-1));
-    }
-    if (!mediaType) {
-      mediaType = this.getMediaTypeFromCategoryId(document.querySelector("#autocat")?.value);
-    }
-    return mediaType;
-  }
-  getMediaTypeFromCategoryId(category) {
-    if (!category) return;
-    return { 1: "movie", 2: "tv", 3: "game", 6: "tv" }[category];
-  }
-  getMediaTypeFromText(text) {
-    if (!text) return;
-    return text.match(/(Movie|TV)/i)?.[1].toLowerCase();
-  }
-  setInputValue(input, value) {
-    if (!input) return;
-    input.value = value ?? "";
-    input.dispatchEvent(new Event("change"));
-  }
-  setCheckboxChecked(checkbox, checked) {
-    if (!checkbox) return;
-    checkbox.checked = checked;
-    checkbox.dispatchEvent(new Event("change"));
   }
 };
 
@@ -434,6 +560,7 @@ for (const page of validPages) {
   unit3d = new UNIT3D({
     api: new API({
       tmdbKey: TMDB_API_KEY
-    })
+    }),
+    gui: new GUI()
   });
 }
