@@ -1,5 +1,5 @@
 {
-  "name": "Seedpool Auto TV/Movie IDs",
+  "name": "seedpool Auto TV/Movie IDs",
   "namespace": "github.com/cmd430",
   "match": [
     "https://seedpool.org/*"
@@ -9,7 +9,7 @@
   ],
   "icon": "https://seedpool.org/favicon.ico",
   "inject-into": "content",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "author": "cmd430",
   "description": "Make adding TV/Movie ids less painful during torrent moderation",
   "run-at": "document-body"

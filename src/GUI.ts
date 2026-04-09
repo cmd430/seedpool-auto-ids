@@ -19,7 +19,7 @@ export class GUI {
     if (e.type === 'selectionchange' && currentSelection?.toString() !== '') return
 
     if (!currentSelection?.toString() || /^\d+$/.test(currentSelection?.toString().trim())) {
-      quickSearch.style.opacity = '0'
+      quickSearch.classList.remove('active')
       this.textSelection = ''
       this.siteButtons.forEach(button => button.classList.remove('selected'))
     } else {
@@ -58,7 +58,7 @@ export class GUI {
       quickSearch.style.left = `${window.scrollX + rect.left}px`
 
       this.textSelection = currentSelection?.toString()
-      quickSearch.style.opacity = '1'
+      quickSearch.classList.add('active')
     }
   }
 
@@ -131,17 +131,17 @@ export class GUI {
     const style = createElementFromString<HTMLStyleElement>(/*html*/`
       <style>${/*css*/`
         #quickSearch {
-          position: absolute;
-          z-index: 999999;
           display: flex;
+          position: absolute;
           gap: 6px;
-          opacity: 0;
-          transition: opacity 0.2s ease;
-          pointer-events: auto;
-          background: var(--body-bg);
           padding: 5px;
           border-radius: 12px;
-          border: var(--input-text-border);
+          z-index: 999999;
+          background: #181818;
+          border: #555555;
+          transition: opacity 0.2s ease;
+          opacity: 0;
+          pointer-events: none;
 
           > button {
             width: 36px;
@@ -155,7 +155,7 @@ export class GUI {
             overflow: clip;
 
             &.selected {
-              outline: 2px solid var(--color-green);
+              outline: 2px solid #4caf50;
             }
 
             &:hover {
@@ -170,6 +170,10 @@ export class GUI {
               width: 32px;
               height: 32px;
               object-fit: contain;
+            }
+
+            > svg {
+              padding: 4px;
               fill: #FFFFFF;
             }
           }
@@ -179,8 +183,13 @@ export class GUI {
             height: 20px;
             align-self: center;
             border-radius: 1px;
-            background: var(--label-fg);
+            background: #555555;
             display: none;
+          }
+
+          &.active {
+            opacity: 1;
+            pointer-events: auto;
           }
 
           &:has(button.selected) {
@@ -202,6 +211,11 @@ export class GUI {
           &[data-type*="game"] > button[data-types*="game"] {
             display: flex;
           }
+        }
+
+        /* cosmetic fix for homepage having unusable select checkboxes */
+        .data-table-wrapper:not(.torrent-search--list__results) .torrent-search--list__poster > div:first-child {
+          display: none;
         }
       `}</style>
     `)
@@ -264,9 +278,9 @@ export class GUI {
       },
       {
         id: 'sp',
-        name: 'Seedpool',
-        icon: 'https://seedpool.org/favicon.ico',
-        bg:'#000000',
+        name: 'seedpool',
+        icon: 'https://chat.seedpool.org/img/logo-transparent-bg-inverted.svg',
+        bg:'#090909',
         search (t: string) {
           return `https://seedpool.org/torrents?name=${encodeURIComponent(t.replace(/\s+/g,'.'))}`
         },
@@ -316,6 +330,18 @@ export class GUI {
         window.open(site.search(searchText), `${site.name} Popup`, 'width=1200,height=800,resizable,scrollbars')
       })
 
+      // for MacReady
+      siteButton.addEventListener('contextmenu', e => {
+        const searchText = getSearchText()
+        if (!searchText) return
+
+        e.preventDefault()
+
+        siteButton.dispatchEvent(new PointerEvent('click', {
+          ctrlKey: true
+        }))
+      })
+
       quickSearch.appendChild(siteButton)
       siteButtons.push(siteButton)
     })
@@ -341,12 +367,24 @@ export class GUI {
       for (const siteButton of siteButtons) {
         if (!siteButton.classList.contains('selected')) continue
 
-        siteButton?.dispatchEvent(new PointerEvent('click', {
+        siteButton.dispatchEvent(new PointerEvent('click', {
           ctrlKey: e.ctrlKey
         }))
       }
 
       siteButtons.forEach(button => button.classList.remove('selected'))
+    })
+
+    // for MacReady
+    multiButton.addEventListener('contextmenu', e => {
+      const searchText = getSearchText()
+      if (!searchText) return
+
+      e.preventDefault()
+
+      multiButton.dispatchEvent(new PointerEvent('click', {
+        ctrlKey: true
+      }))
     })
 
     quickSearch.appendChild(multiButton)
