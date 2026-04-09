@@ -135,35 +135,33 @@ export class GUI {
           position: absolute;
           gap: 6px;
           padding: 5px;
-          border-radius: 12px;
+          border-radius: 8px;
           z-index: 999999;
           background: #181818;
-          border: #555555;
-          transition: opacity 0.2s ease;
+          border: 1px solid #555;
+          transition: opacity 220ms linear;
           opacity: 0;
           pointer-events: none;
+          overflow: hidden;
 
-          > button {
+          button {
             width: 36px;
             height: 36px;
             border: none;
-            border-radius: 8px;
+            border-radius: 4px;
             cursor: pointer;
             display: none;
             padding: 2px;
-            transition: transform 0.15s ease;
+            transition: transform 150ms ease, outline 150ms ease;
             overflow: clip;
+            outline: 2px solid transparent;
 
             &.selected {
               outline: 2px solid #4caf50;
             }
 
             &:hover {
-              transform: scale(1.24);
-            }
-
-            &#quickSearchMultiConfirm {
-              display: none;
+              transform: scale(1.14);
             }
 
             > img, > svg {
@@ -178,13 +176,27 @@ export class GUI {
             }
           }
 
-          span.divider {
-            width: 1px;
-            height: 20px;
-            align-self: center;
-            border-radius: 1px;
-            background: #555555;
-            display: none;
+          #multiConfirm {
+            display: flex;
+            gap: 6px;
+            padding-left: 6px;
+            margin: 0 -6px 0 -6px;
+            width: 0;
+            transition: width 200ms ease;
+
+            .divider {
+              width: 1px;
+              height: 20px;
+              align-self: center;
+              border-radius: 1px;
+              background: #555555;
+              display: flex;
+              flex-shrink: 0;
+            }
+
+            button {
+              display: flex;
+            }
           }
 
           &.active {
@@ -192,14 +204,8 @@ export class GUI {
             pointer-events: auto;
           }
 
-          &:has(button.selected) {
-            > span.divider {
-              display: flex;
-            }
-
-            > #quickSearchMultiConfirm {
-              display: flex;
-            }
+          &:has(button.selected) > #multiConfirm {
+            width: 55px;
           }
 
           &[data-type*="tv"] > button[data-types*="tv"] {
@@ -346,13 +352,8 @@ export class GUI {
       siteButtons.push(siteButton)
     })
 
-    const divider = createElementFromString<HTMLSpanElement>(/*html*/`
-      <span class="divider"></span>
-    `)
-    quickSearch.appendChild(divider)
-
     const multiButton = createElementFromString<HTMLButtonElement>(/*html*/`
-      <button id="quickSearchMultiConfirm" title="Open Selected" style="background: #4caf50" data-types="tv,movie,game">
+      <button id="confirm" title="Open Selected" style="background: #4caf50">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
           <path d="M42 8.6a2 2 0 0 0-1.7 1L21.5 38.3 9.3 27.8a2 2 0 0 0-3.4 1 2 2 0 0 0 .8 2l14 12a2 2 0 0 0 2.9-.4l20-30.6A2 2 0 0 0 42 8.6"/>
         </svg>
@@ -387,7 +388,14 @@ export class GUI {
       }))
     })
 
-    quickSearch.appendChild(multiButton)
+    const multiBox = createElementFromString<HTMLDivElement>(/*html*/`
+      <div id="multiConfirm">
+        <span class="divider"></span>
+      </div>
+    `)
+
+    multiBox.appendChild(multiButton)
+    quickSearch.appendChild(multiBox)
     document.body.appendChild(quickSearch)
   }
 
