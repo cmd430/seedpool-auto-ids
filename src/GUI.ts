@@ -288,7 +288,7 @@ export class GUI {
         icon: 'https://chat.seedpool.org/img/logo-transparent-bg-inverted.svg',
         bg:'#090909',
         search (t: string) {
-          return `https://seedpool.org/torrents?name=${encodeURIComponent(t.replace(/\s+/g,'.'))}`
+          return `https://seedpool.org/torrents?name=${encodeURIComponent(t.replace(/\s+/g,'.'))}&perPage=50`
         },
         types: [ 'tv', 'movie', 'game' ]
       }

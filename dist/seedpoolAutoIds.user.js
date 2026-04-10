@@ -5,7 +5,7 @@
 // @grant         none
 // @icon          https://seedpool.org/favicon.ico
 // @inject-into   content
-// @version       0.2.9
+// @version       0.2.10
 // @author        cmd430
 // @description   Make adding TV/Movie ids less painful during torrent moderation
 // @run-at        document-body
@@ -405,7 +405,7 @@ var GUI = class {
         icon: "https://chat.seedpool.org/img/logo-transparent-bg-inverted.svg",
         bg: "#090909",
         search(t) {
-          return `https://seedpool.org/torrents?name=${encodeURIComponent(t.replace(/\s+/g, "."))}`;
+          return `https://seedpool.org/torrents?name=${encodeURIComponent(t.replace(/\s+/g, "."))}&perPage=50`;
         },
         types: ["tv", "movie", "game"]
       }
